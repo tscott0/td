@@ -16,8 +16,7 @@ const (
 )
 
 var (
-	tl         taskList
-	listCursor int
+	tl taskList
 )
 
 type task struct {
@@ -83,7 +82,6 @@ func showItem(g *gocui.Gui, i int) error {
 
 	d.Clear()
 	fmt.Fprintln(d, t.Desc)
-	fmt.Fprintln(d, strconv.Itoa(i))
 
 	// Update Meta
 	m, err := g.View("meta")
@@ -108,7 +106,9 @@ func cursorDown(g *gocui.Gui, v *gocui.View) error {
 					return err
 				}
 			}
-			showItem(g, cy+1)
+			if err := showItem(g, cy+1); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -132,9 +132,13 @@ func listDown(g *gocui.Gui, v *gocui.View) error {
 			tl.Task[cy+1] = a
 			tl.Task[cy] = b
 
-			drawList(g)
+			if err := drawList(g); err != nil {
+				return err
+			}
 
-			showItem(g, cy+1)
+			if err := showItem(g, cy+1); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -150,8 +154,10 @@ func cursorUp(g *gocui.Gui, v *gocui.View) error {
 					return err
 				}
 			}
+			if err := showItem(g, cy-1); err != nil {
+				return err
+			}
 		}
-		showItem(g, cy-1)
 	}
 	return nil
 }
@@ -173,9 +179,13 @@ func listUp(g *gocui.Gui, v *gocui.View) error {
 			tl.Task[cy-1] = a
 			tl.Task[cy] = b
 
-			drawList(g)
+			if err := drawList(g); err != nil {
+				return err
+			}
 
-			showItem(g, cy-1)
+			if err := showItem(g, cy-1); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -211,9 +221,14 @@ func layout(g *gocui.Gui) error {
 
 		if len(tl.Task) > 0 {
 			fmt.Fprintln(v, listString())
+			if err := v.SetCursor(1, 0); err != nil {
+				ox, oy := v.Origin()
+				if err := v.SetOrigin(ox, oy+1); err != nil {
+					return err
+				}
+			}
 		}
 
-		v.SetCursor(1, listCursor)
 		if _, err := g.SetCurrentView("list"); err != nil {
 			return err
 		}
