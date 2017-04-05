@@ -1,11 +1,23 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/BurntSushi/toml"
-	ui "github.com/gizak/termui"
+	"github.com/jroimartin/gocui"
+)
+
+const (
+	descHeight = 10
+	metaHeight = 4
+)
+
+var (
+	tl         taskList
+	listCursor int
 )
 
 type task struct {
@@ -20,111 +32,240 @@ type taskList struct {
 	Task []task
 }
 
+func quit(g *gocui.Gui, v *gocui.View) error {
+	return gocui.ErrQuit
+}
+
+func maxCursor() int {
+	return len(tl.Task) - 1
+}
+
+func (t *task) metaString() string {
+	var s string
+	s += "Added: " + t.Created.Format("Mon Jan _2 15:04:05 2006") + "\n"
+	s += "Due:   " + t.Deadline.Format("Mon Jan _2 15:04:05 2006") + "\n"
+	s += "URL:   " + t.URL
+
+	return s
+}
+func listString() string {
+	var s string
+	for i, t := range tl.Task {
+		s += "[" + strconv.Itoa(i+1) + "] " + t.Name + "\n"
+	}
+	return s
+}
+
+func drawList(g *gocui.Gui) error {
+	l, err := g.View("list")
+	if err != nil {
+		return err
+	}
+
+	l.Clear()
+	fmt.Fprintln(l, listString())
+
+	return nil
+}
+
+func showItem(g *gocui.Gui, i int) error {
+	if i < 0 || i > maxCursor() {
+		return gocui.ErrQuit
+	}
+
+	t := tl.Task[i]
+
+	// Update description
+	d, err := g.View("desc")
+	if err != nil {
+		return err
+	}
+
+	d.Clear()
+	fmt.Fprintln(d, t.Desc)
+	fmt.Fprintln(d, strconv.Itoa(i))
+
+	// Update Meta
+	m, err := g.View("meta")
+	if err != nil {
+		return err
+	}
+
+	m.Clear()
+	fmt.Fprintln(m, t.metaString())
+
+	return nil
+
+}
+
+func cursorDown(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		cx, cy := v.Cursor()
+		if cy < maxCursor() {
+			if err := v.SetCursor(cx, cy+1); err != nil {
+				ox, oy := v.Origin()
+				if err := v.SetOrigin(ox, oy+1); err != nil {
+					return err
+				}
+			}
+			showItem(g, cy+1)
+		}
+	}
+
+	return nil
+}
+
+func listDown(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		cx, cy := v.Cursor()
+		if cy < maxCursor() {
+			if err := v.SetCursor(cx, cy+1); err != nil {
+				ox, oy := v.Origin()
+				if err := v.SetOrigin(ox, oy+1); err != nil {
+					return err
+				}
+			}
+
+			// Swap positions of a and b in array
+			a := tl.Task[cy]
+			b := tl.Task[cy+1]
+			tl.Task[cy+1] = a
+			tl.Task[cy] = b
+
+			drawList(g)
+
+			showItem(g, cy+1)
+		}
+	}
+	return nil
+}
+
+func cursorUp(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		cx, cy := v.Cursor()
+		if cy > 0 {
+			if err := v.SetCursor(cx, cy-1); err != nil && oy > 0 {
+				if err := v.SetOrigin(ox, oy-1); err != nil {
+					return err
+				}
+			}
+		}
+		showItem(g, cy-1)
+	}
+	return nil
+}
+
+func listUp(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		cx, cy := v.Cursor()
+		if cy > 0 {
+			if err := v.SetCursor(cx, cy-1); err != nil && oy > 0 {
+				if err := v.SetOrigin(ox, oy-1); err != nil {
+					return err
+				}
+			}
+
+			// Swap positions of a and b in array
+			a := tl.Task[cy]
+			b := tl.Task[cy-1]
+			tl.Task[cy-1] = a
+			tl.Task[cy] = b
+
+			drawList(g)
+
+			showItem(g, cy-1)
+		}
+	}
+	return nil
+}
+func keybindings(g *gocui.Gui) error {
+	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("list", gocui.KeyArrowDown, gocui.ModNone, cursorDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("list", gocui.KeyArrowUp, gocui.ModNone, cursorUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("list", gocui.KeyArrowRight, gocui.ModNone, listDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("list", gocui.KeyArrowLeft, gocui.ModNone, listUp); err != nil {
+		return err
+	}
+	return nil
+}
+
+func layout(g *gocui.Gui) error {
+	maxX, maxY := g.Size()
+	if v, err := g.SetView("list", -1, -1, maxX, maxY-descHeight-metaHeight); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Highlight = true
+		v.SelBgColor = gocui.ColorGreen
+		v.SelFgColor = gocui.ColorBlack
+
+		if len(tl.Task) > 0 {
+			fmt.Fprintln(v, listString())
+		}
+
+		v.SetCursor(1, listCursor)
+		if _, err := g.SetCurrentView("list"); err != nil {
+			return err
+		}
+	}
+	if v, err := g.SetView("desc", 0, maxY-descHeight-metaHeight, maxX-1, maxY-metaHeight); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Editable = true
+		v.Wrap = true
+		v.Title = "Description"
+
+		if len(tl.Task) > 0 {
+			t := tl.Task[0]
+			fmt.Fprintln(v, t.Desc)
+		}
+	}
+	if v, err := g.SetView("meta", 0, maxY-metaHeight, maxX-1, maxY); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		if len(tl.Task) > 0 {
+			t := tl.Task[0]
+			fmt.Fprintln(v, t.metaString())
+		}
+	}
+	return nil
+}
+
 func main() {
 
-	err := ui.Init()
-	if err != nil {
-		panic(err)
-	}
-	defer ui.Close()
-
-	tt := NewTidyTable()
-
-	par2 := ui.NewPar(" q quit")
-	par2.Height = 6
-	par2.BorderLabel = "Controls"
-
-	desc := ui.NewPar("This is a long\ndescription")
-	desc.Height = 11
-	desc.BorderLabel = "Description"
-
-	url := ui.NewPar("A URL string")
-	url.Height = 3
-	url.BorderLabel = "URL"
-
-	created := ui.NewPar("Mon Jan _2 15:04:05 2006")
-	created.Height = 3
-	created.BorderLabel = "Added"
-
-	deadline := ui.NewPar("Mon Jan _2 15:04:05 2006")
-	deadline.Height = 3
-	deadline.BorderLabel = "Deadline"
-
-	var tl taskList
 	if _, err := toml.DecodeFile("config.toml", &tl); err != nil {
 		//fmt.Println(err)
 		return
 	}
 
-	//for _, t := range tl.Task {
-	// TODO
-	//}
+	g, err := gocui.NewGui(gocui.OutputNormal)
+	if err != nil {
+		log.Panicln(err)
+	}
+	defer g.Close()
 
-	tt.Height = 3 + len(tl.Task)
+	g.Cursor = true
 
-	// build layout
-	ui.Body.AddRows(ui.NewRow(ui.NewCol(12, 0, tt)))
-	ui.Body.AddRows(ui.NewRow(ui.NewCol(12, 0, desc)))
-	ui.Body.AddRows(ui.NewRow(ui.NewCol(12, 0, url)))
-	ui.Body.AddRows(ui.NewRow(ui.NewCol(12, 0, created)))
-	ui.Body.AddRows(ui.NewRow(ui.NewCol(12, 0, deadline)))
-	ui.Body.AddRows(ui.NewRow(ui.NewCol(12, 0, par2)))
+	g.SetManagerFunc(layout)
 
-	// calculate layout
-	ui.Body.Align()
-
-	rows1 := make([][]string, 1+len(tl.Task))
-
-	draw := func(z int) {
-		i := 0
-		for _, t := range tl.Task {
-			rows1[i] = []string{t.Name}
-			if tt.cursor == i {
-				desc.Text = t.Desc
-				url.Text = t.URL
-				created.Text = t.Created.Format("Mon Jan _2 15:04:05 2006")
-				deadline.Text = t.Deadline.Format("Mon Jan _2 15:04:05 2006")
-			}
-			if z != 0 {
-				par2.Text = strconv.Itoa(z)
-			}
-			i++
-		}
-		tt.Rows = rows1
-		tt.Highlight()
-		ui.Render(ui.Body)
+	if err := keybindings(g); err != nil {
+		log.Panicln(err)
 	}
 
-	// TODO: Bit of a hack. Not sure why it doesn't draw immediately
-	draw(0)
-	//tt.BgColors[0] = ui.ColorGreen
-
-	ui.Handle("/sys/kbd/q", func(ui.Event) {
-		ui.StopLoop()
-	})
-
-	ui.Handle("/sys/kbd/<up>", func(ui.Event) {
-		tt.Up()
-		draw(0)
-	})
-
-	ui.Handle("/sys/kbd/<down>", func(ui.Event) {
-		tt.Down()
-		draw(0)
-	})
-
-	ui.Handle("/timer/1s", func(e ui.Event) {
-		t := e.Data.(ui.EvtTimer)
-		draw(int(t.Count))
-	})
-
-	ui.Handle("/sys/wnd/resize", func(e ui.Event) {
-		ui.Body.Width = ui.TermWidth()
-		ui.Body.Align()
-		ui.Clear()
-		ui.Render(ui.Body)
-	})
-
-	ui.Loop()
+	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
+		log.Panicln(err)
+	}
 
 }
