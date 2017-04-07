@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"strconv"
 	"time"
@@ -81,7 +83,7 @@ func showItem(g *gocui.Gui, i int) error {
 	}
 
 	d.Clear()
-	fmt.Fprintln(d, t.Desc)
+	fmt.Fprintf(d, "%s", t.Desc)
 
 	// Update Meta
 	m, err := g.View("meta")
@@ -93,7 +95,6 @@ func showItem(g *gocui.Gui, i int) error {
 	fmt.Fprintln(m, t.metaString())
 
 	return nil
-
 }
 
 func cursorDown(g *gocui.Gui, v *gocui.View) error {
@@ -190,6 +191,38 @@ func listUp(g *gocui.Gui, v *gocui.View) error {
 	}
 	return nil
 }
+
+func editDesc(g *gocui.Gui, v *gocui.View) error {
+	if _, err := g.SetCurrentView("desc"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func descFinish(g *gocui.Gui, v *gocui.View) error {
+	l, err := g.View("list")
+	if err != nil {
+		return err
+	}
+	_, cy := l.Cursor()
+
+	tl.Task[cy].Desc = v.Buffer()
+
+	buf := new(bytes.Buffer)
+	if err := toml.NewEncoder(buf).Encode(tl); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := ioutil.WriteFile("config.toml", buf.Bytes(), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	if _, err := g.SetCurrentView("list"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func keybindings(g *gocui.Gui) error {
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
 		return err
@@ -204,6 +237,13 @@ func keybindings(g *gocui.Gui) error {
 		return err
 	}
 	if err := g.SetKeybinding("list", gocui.KeyArrowLeft, gocui.ModNone, listUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("list", gocui.KeyEnter, gocui.ModNone, editDesc); err != nil {
+		return err
+	}
+
+	if err := g.SetKeybinding("desc", gocui.KeyCtrlSpace, gocui.ModNone, descFinish); err != nil {
 		return err
 	}
 	return nil
