@@ -1,43 +1,27 @@
-[[task]]
-name = "Shopping"
-desc = """
-- Multiline description
-- Much wow
-"""
-url = "https://www.google.co.uk/"
-created = 1979-05-27T07:13:00Z
-deadline = 2017-01-27T08:21:00Z
+[[Task]]
+  Name = "Shopping"
+  Desc = "- Multiline description\n- Much wow"
+  URL = "https://www.google.co.uk/"
+  Created = 1979-05-27T07:13:00Z
+  Deadline = 2017-01-27T08:21:00Z
 
-[[task]]
-name = "Dishes"
-desc = """
-- Fill water
-- Add washing up liquid
-"""
-url = "https://www.washingup.co.uk/"
-created = 2016-01-27T15:44:12Z
-deadline = 2017-06-27T08:24:02Z
+[[Task]]
+  Name = "Dishes"
+  Desc = "- Fill water\n- Add washing up liquid"
+  URL = "https://www.washingup.co.uk/"
+  Created = 2016-01-27T15:44:12Z
+  Deadline = 2017-06-27T08:24:02Z
 
-[[task]]
-name = "Write some Go"
-desc = """
-- Learn basics
-- Write so programs
-- Have fun
-"""
-url = "http://www.golang.org/"
-created = 1994-05-27T07:35:02Z
-deadline = 2016-05-27T07:32:00Z
+[[Task]]
+  Name = "Write some Go"
+  Desc = "- Learn basics\n- Write so programs\n- Have fun\n- ETC"
+  URL = "http://www.golang.org/"
+  Created = 1994-05-27T07:35:02Z
+  Deadline = 2016-05-27T07:32:00Z
 
-[[task]]
-name = "Become fresh prince"
-desc = """
-Now this is a story all about how
-My life got flipped-turned upside down
-And I'd like to take a minute
-Just sit right there
-I'll tell you how I became the prince of a town called Bel-Air
-"""
-url = "http://www.azlyrics.com/lyrics/djjazzyjeffthefreshprince/freshprinceofbelairthemesong.html"
-created = 1990-09-10T07:35:02Z
-deadline = 1996-05-20T05:32:00Z
+[[Task]]
+  Name = "Become fresh prince"
+  Desc = "Now this is a story all about how\nMy life got flipped-turned upside down\nAnd I'd like to take a minute\nJust sit right there\nI'll tell you how I became the prince of a town called Bel-Air"
+  URL = "http://www.azlyrics.com/lyrics/djjazzyjeffthefreshprince/freshprinceofbelairthemesong.html"
+  Created = 1990-09-10T07:35:02Z
+  Deadline = 1996-05-20T05:32:00Z

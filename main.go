@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -19,6 +20,7 @@ const (
 
 var (
 	tl taskList
+	tc int
 )
 
 type task struct {
@@ -97,6 +99,74 @@ func showItem(g *gocui.Gui, i int) error {
 	return nil
 }
 
+func newDialog(g *gocui.Gui, v *gocui.View) error {
+
+	maxX, maxY := g.Size()
+	if v, err := g.SetView("new", maxX/2-30, maxY/2, maxX/2+30, maxY/2+2); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+
+		v.Editable = true
+
+		if _, err := g.SetCurrentView("new"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func newTask(g *gocui.Gui, v *gocui.View) error {
+	defer closeNewDialog(g, v)
+
+	newName := strings.TrimSpace(v.Buffer())
+
+	if newName == "" {
+		return nil
+	}
+
+	// TODO: Default values for new tasks
+	t := task{
+		Name:     newName,
+		Desc:     "",
+		URL:      "",
+		Created:  time.Now(),
+		Deadline: time.Now(),
+	}
+
+	tl.insertTask(g, tc, t)
+
+	return nil
+}
+
+func (t *taskList) insertTask(g *gocui.Gui, index int, value task) error {
+
+	new := make([]task, len(tl.Task)+1)
+
+	before := tl.Task[:index]
+	after := tl.Task[index:]
+
+	new = append(before, value)
+	new = append(new, after...)
+
+	t.Task = new
+
+	// TODO buggy
+	drawList(g)
+
+	return nil
+}
+
+func closeNewDialog(g *gocui.Gui, v *gocui.View) error {
+	if err := g.DeleteView("new"); err != nil {
+		return err
+	}
+	if _, err := g.SetCurrentView("list"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func cursorDown(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		cx, cy := v.Cursor()
@@ -107,7 +177,10 @@ func cursorDown(g *gocui.Gui, v *gocui.View) error {
 					return err
 				}
 			}
-			if err := showItem(g, cy+1); err != nil {
+
+			tc = cy + 1
+
+			if err := showItem(g, tc); err != nil {
 				return err
 			}
 		}
@@ -116,7 +189,7 @@ func cursorDown(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func listDown(g *gocui.Gui, v *gocui.View) error {
+func itemDown(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		cx, cy := v.Cursor()
 		if cy < maxCursor() {
@@ -137,7 +210,9 @@ func listDown(g *gocui.Gui, v *gocui.View) error {
 				return err
 			}
 
-			if err := showItem(g, cy+1); err != nil {
+			tc = cy + 1
+
+			if err := showItem(g, tc); err != nil {
 				return err
 			}
 		}
@@ -155,7 +230,10 @@ func cursorUp(g *gocui.Gui, v *gocui.View) error {
 					return err
 				}
 			}
-			if err := showItem(g, cy-1); err != nil {
+
+			tc = cy - 1
+
+			if err := showItem(g, tc); err != nil {
 				return err
 			}
 		}
@@ -163,7 +241,7 @@ func cursorUp(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func listUp(g *gocui.Gui, v *gocui.View) error {
+func itemUp(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		ox, oy := v.Origin()
 		cx, cy := v.Cursor()
@@ -184,7 +262,9 @@ func listUp(g *gocui.Gui, v *gocui.View) error {
 				return err
 			}
 
-			if err := showItem(g, cy-1); err != nil {
+			tc = cy - 1
+
+			if err := showItem(g, tc); err != nil {
 				return err
 			}
 		}
@@ -199,14 +279,8 @@ func editDesc(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func descFinish(g *gocui.Gui, v *gocui.View) error {
-	l, err := g.View("list")
-	if err != nil {
-		return err
-	}
-	_, cy := l.Cursor()
-
-	tl.Task[cy].Desc = v.Buffer()
+func writeDesc(g *gocui.Gui, v *gocui.View) error {
+	tl.Task[tc].Desc = strings.TrimSpace(v.Buffer())
 
 	buf := new(bytes.Buffer)
 	if err := toml.NewEncoder(buf).Encode(tl); err != nil {
@@ -233,19 +307,30 @@ func keybindings(g *gocui.Gui) error {
 	if err := g.SetKeybinding("list", gocui.KeyArrowUp, gocui.ModNone, cursorUp); err != nil {
 		return err
 	}
-	if err := g.SetKeybinding("list", gocui.KeyArrowRight, gocui.ModNone, listDown); err != nil {
+	if err := g.SetKeybinding("list", gocui.KeyArrowRight, gocui.ModNone, itemDown); err != nil {
 		return err
 	}
-	if err := g.SetKeybinding("list", gocui.KeyArrowLeft, gocui.ModNone, listUp); err != nil {
+	if err := g.SetKeybinding("list", gocui.KeyArrowLeft, gocui.ModNone, itemUp); err != nil {
 		return err
 	}
 	if err := g.SetKeybinding("list", gocui.KeyEnter, gocui.ModNone, editDesc); err != nil {
 		return err
 	}
-
-	if err := g.SetKeybinding("desc", gocui.KeyCtrlSpace, gocui.ModNone, descFinish); err != nil {
+	if err := g.SetKeybinding("list", gocui.KeyCtrlN, gocui.ModNone, newDialog); err != nil {
 		return err
 	}
+
+	if err := g.SetKeybinding("desc", gocui.KeyCtrlSpace, gocui.ModNone, writeDesc); err != nil {
+		return err
+	}
+
+	if err := g.SetKeybinding("new", gocui.KeyEnter, gocui.ModNone, newTask); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("new", gocui.KeyEsc, gocui.ModNone, closeNewDialog); err != nil {
+		return err
+	}
+
 	return nil
 }
 
